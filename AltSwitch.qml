@@ -32,6 +32,21 @@ Item {
   readonly property int cardWidth: Math.min(Style.space(560), panel.width - Style.gapsOut * 2)
   readonly property int maxCardHeight: panel.height - Style.gapsOut * 2
 
+  function friendlyAppName(appClass) {
+    const raw = String(appClass || "").trim()
+    if (!raw) return "Unknown"
+
+    // Window classes usually match a desktop-file id or StartupWMClass.
+    // Let Quickshell resolve both before falling back to formatting the id.
+    const entry = DesktopEntries.heuristicLookup(raw)
+    if (entry && entry.name) return String(entry.name)
+
+    let name = raw.replace(/^steam_app_/i, "")
+    if (name.indexOf(".") !== -1) name = name.split(".").pop()
+    name = name.replace(/[_-]+/g, " ").trim()
+    return name.replace(/(^|\s)\S/g, function(letter) { return letter.toUpperCase() })
+  }
+
   function show(payloadJson) {
     // Armed before anything that can throw, so a payload this panel cannot read
     // can never strand it on screen.
@@ -180,7 +195,7 @@ Item {
               Layout.preferredWidth: Style.space(88)
               Layout.maximumWidth: Style.space(88)
               elide: Text.ElideRight
-              text: modelData.appClass
+              text: root.friendlyAppName(modelData.appClass)
               color: index === root.selectedIndex ? Color.menu.selectedText : Color.menu.text
               opacity: 0.7
               font.family: Style.font.menuFamily
