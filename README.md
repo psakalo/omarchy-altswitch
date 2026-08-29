@@ -57,10 +57,10 @@ needed.
 
 ## Settings
 
-Application icons are hidden by default. Enable them with:
+Application icons are shown by default. Hide them with:
 
 ```bash
-omarchy-shell altswitch set showIcons true
+omarchy-shell altswitch set showIcons false
 ```
 
 | Command | Effect |

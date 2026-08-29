@@ -41,7 +41,7 @@ Item {
     }
     return ({})
   }
-  readonly property bool showIcons: pluginEntry.showIcons === true
+  readonly property bool showIcons: pluginEntry.showIcons !== false
 
   readonly property int rowHeight: Math.max(Style.space(34), Style.font.body + Style.spacing.controlPaddingY * 2)
   readonly property int cardWidth: Math.min(Style.space(560), panel.width - Style.gapsOut * 2)
