@@ -55,6 +55,28 @@ That line replaces Omarchy's four default `ALT`+`TAB` bindings (`cyclenext` and
 `bring_to_top`, in both directions). It unbinds them itself, so no other edit is
 needed.
 
+## Settings
+
+Application icons are shown by default. Hide them with:
+
+```bash
+omarchy-shell altswitch set showIcons false
+```
+
+| Command | Effect |
+| --- | --- |
+| `omarchy-shell altswitch set showIcons true` | Show application icons |
+| `omarchy-shell altswitch set showIcons false` | Hide application icons |
+
+Changes apply immediately and persist in the plugin's entry in
+`~/.config/omarchy/shell.json`.
+
+The equivalent manual setting is:
+
+```json
+{ "id": "io.github.pablo-merino.altswitch", "showIcons": true }
+```
+
 ## Remove
 
 Delete the `dofile` line from `~/.config/hypr/bindings.lua`, then:
@@ -93,8 +115,7 @@ Two Hyprland details are worth knowing if you plan to modify this:
 - Keys that the switcher does not bind still reach the window underneath while
   the list is open. Blocking them needs an exclusive keyboard grab, which risks
   trapping the keyboard if a switch is ever left open.
-- Rows show the workspace, the app class, and the title. There are no icons and
-  no window thumbnails.
+- There are no window thumbnails.
 
 ## License
 

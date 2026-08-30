@@ -24,13 +24,49 @@ import qs.Ui
 Item {
   id: root
 
+  // Injected by Omarchy's panel loader.
+  property var shell: null
+  property var manifest: null
   property bool opened: false
   property var windows: []
   property int selectedIndex: 0
 
+  readonly property string pluginId: String((manifest && manifest.id) || "io.github.pablo-merino.altswitch")
+  readonly property var pluginEntry: {
+    const config = shell ? shell.shellConfig : null
+    const plugins = config && Array.isArray(config.plugins) ? config.plugins : []
+    for (let i = 0; i < plugins.length; i++) {
+      const entry = plugins[i]
+      if (entry && entry.id === root.pluginId) return entry
+    }
+    return ({})
+  }
+  readonly property bool showIcons: pluginEntry.showIcons !== false
+
   readonly property int rowHeight: Math.max(Style.space(34), Style.font.body + Style.spacing.controlPaddingY * 2)
   readonly property int cardWidth: Math.min(Style.space(560), panel.width - Style.gapsOut * 2)
   readonly property int maxCardHeight: panel.height - Style.gapsOut * 2
+
+  function updatePluginSetting(name, value) {
+    if (!shell || typeof shell.updateEntryInline !== "function") return false
+
+    const next = ({})
+    for (const key in root.pluginEntry) if (key !== "id") next[key] = root.pluginEntry[key]
+    next[name] = value
+    shell.updateEntryInline(root.pluginId, next)
+    return true
+  }
+
+  function setPluginSetting(name, rawValue) {
+    if (name !== "showIcons") return "unknown setting: " + name
+
+    const value = String(rawValue || "").trim().toLowerCase()
+    if (value !== "true" && value !== "false") return "showIcons must be true or false"
+
+    const enabled = value === "true"
+    if (!root.updatePluginSetting(name, enabled)) return "unavailable"
+    return String(enabled)
+  }
 
   function friendlyAppName(appClass) {
     const raw = String(appClass || "").trim()
@@ -45,6 +81,16 @@ Item {
     if (name.indexOf(".") !== -1) name = name.split(".").pop()
     name = name.replace(/[_-]+/g, " ").trim()
     return name.replace(/(^|\s)\S/g, function(letter) { return letter.toUpperCase() })
+  }
+
+  function appIcon(appClass) {
+    const raw = String(appClass || "").trim()
+    const entry = raw ? DesktopEntries.heuristicLookup(raw) : null
+    const icon = entry ? String(entry.icon || "") : ""
+
+    if (icon.indexOf("file://") === 0 || icon.indexOf("image://") === 0) return icon
+    if (icon.charAt(0) === "/") return Util.fileUrl(icon)
+    return Quickshell.iconPath(icon || "application-x-executable", true)
   }
 
   function show(payloadJson) {
@@ -108,6 +154,10 @@ Item {
 
     function state(): string {
       return root.opened ? "open" : "closed"
+    }
+
+    function set(name: string, value: string): string {
+      return root.setPluginSetting(name, value)
     }
   }
 
@@ -189,6 +239,17 @@ Item {
               opacity: 0.5
               font.family: Style.font.menuFamily
               font.pixelSize: Style.font.body
+            }
+
+            Image {
+              visible: root.showIcons
+              Layout.preferredWidth: Style.space(24)
+              Layout.preferredHeight: Style.space(24)
+              fillMode: Image.PreserveAspectFit
+              sourceSize.width: width * Screen.devicePixelRatio
+              sourceSize.height: height * Screen.devicePixelRatio
+              source: root.appIcon(modelData.appClass)
+              asynchronous: true
             }
 
             Text {
