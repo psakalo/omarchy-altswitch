@@ -4,9 +4,9 @@
 // altswitch.lua next to this file, loaded from the Hyprland config. It owns the
 // frozen window list and the cursor, and drives this panel over IPC:
 //
-//   omarchy-shell altswitch show '{"windows":[...],"index":1}'
+//   omarchy-shell altswitch show '{"windows":[...],"index":1,"generation":3}'
 //   omarchy-shell altswitch select 2
-//   omarchy-shell altswitch hide
+//   omarchy-shell altswitch hide 3
 //
 // The panel takes no keyboard focus and deliberately handles no keys of its
 // own, so there is exactly one place where a keypress can be interpreted. Row
@@ -31,6 +31,7 @@ Item {
   property var windows: []
   property int selectedIndex: 0
   property double generation: 0
+  property double closedGeneration: 0
 
   readonly property string pluginId: String((manifest && manifest.id) || "io.github.pablo-merino.altswitch")
   // Third-party shell facades do not expose shellConfig. Watch the user's
@@ -163,9 +164,17 @@ Item {
       return
     }
 
+    // Every IPC call runs in its own process, so a quick tap can deliver a
+    // switch's hide before its show. That show must not reopen the panel.
+    const generation = Number(payload.generation) || 0
+    if (generation > 0 && generation === root.closedGeneration) {
+      watchdog.stop()
+      return
+    }
+
     root.windows = payload.windows || []
     root.selectedIndex = payload.index || 0
-    root.generation = Number(payload.generation) || 0
+    root.generation = generation
     root.opened = root.windows.length > 0
   }
 
@@ -185,7 +194,15 @@ Item {
 
   function hide() {
     watchdog.stop()
+    root.closedGeneration = root.generation
     root.opened = false
+  }
+
+  function close(generation) {
+    root.closedGeneration = generation
+    // A hide that arrives after the next switch's show belongs to the earlier
+    // switch and must not close the current one.
+    if (generation === root.generation) root.hide()
   }
 
   function publishModifier() {
@@ -241,8 +258,8 @@ Item {
       return "ok"
     }
 
-    function hide(): string {
-      root.hide()
+    function hide(generation: int): string {
+      root.close(generation)
       return "ok"
     }
 

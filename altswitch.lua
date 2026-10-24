@@ -106,7 +106,7 @@ end
 local function altswitch_teardown()
   altswitch.active = false
   altswitch.windows = {}
-  altswitch_send("hide")
+  altswitch_send("hide", tostring(altswitch.generation))
 end
 
 local function altswitch_commit()
