@@ -11,7 +11,7 @@
 -- into Lua state by AltSwitch.qml. See the README for supported values.
 --
 -- This half owns all the state and all the keys. The list is drawn by the
--- companion shell plugin, which renders what it is told and nothing else.
+-- companion shell plugin, which also forwards pointer selections back here.
 --
 -- Two details that make it behave like Windows rather than like `cyclenext`:
 --   * The list is snapshotted when the switch starts and then frozen, so the
@@ -60,7 +60,11 @@ for _, keycode in ipairs(configured_keycodes) do
   modifier_keycodes[keycode] = true
 end
 
-local altswitch = { windows = {}, index = 1, active = false }
+-- Keep the counter outside the per-switch state and publish it globally so a
+-- config reload in the same Lua runtime cannot reuse a generation that an
+-- already-dispatched panel click may still carry.
+local generation_counter = tonumber(_G.__altswitch_generation) or 0
+local altswitch = { windows = {}, index = 1, generation = 0, active = false }
 
 local function altswitch_send(method, argument)
   local command = "omarchy-shell -q altswitch " .. method
@@ -92,9 +96,10 @@ local function altswitch_payload()
   end
 
   return string.format(
-    '{"windows":[%s],"index":%d}',
+    '{"windows":[%s],"index":%d,"generation":%d}',
     table.concat(rows, ","),
-    altswitch.index - 1 -- the plugin indexes from zero
+    altswitch.index - 1, -- the plugin indexes from zero
+    altswitch.generation
   )
 end
 
@@ -128,6 +133,30 @@ local function altswitch_commit()
   end
 end
 
+local function altswitch_choose(generation, index)
+  -- The panel indexes from zero. The detached IPC call can arrive late, so it
+  -- must also belong to the snapshot that supplied the clicked row.
+  if not altswitch.active
+      or type(generation) ~= "number"
+      or generation % 1 ~= 0
+      or generation ~= altswitch.generation
+      or type(index) ~= "number"
+      or index % 1 ~= 0
+      or index < 0
+      or index >= #altswitch.windows then
+    return
+  end
+
+  altswitch.index = index + 1
+  altswitch_commit()
+end
+
+local function altswitch_cancel(generation)
+  if altswitch.active and generation == altswitch.generation then
+    altswitch_teardown()
+  end
+end
+
 local function altswitch_snapshot()
   local windows = {}
   for _, window in ipairs(hl.get_windows()) do
@@ -157,6 +186,9 @@ local function altswitch_step(delta)
   -- Entry 1 is the window you are already on, so one tap has to land on entry 2
   -- and one back-tap has to wrap to the oldest.
   altswitch.index = delta % #altswitch.windows + 1
+  generation_counter = generation_counter + 1
+  _G.__altswitch_generation = generation_counter
+  altswitch.generation = generation_counter
   altswitch.active = true
   altswitch_send("show", altswitch_payload())
 end
@@ -164,7 +196,8 @@ end
 -- Self-heal hook for the panel. If the modifier release is ever missed, the
 -- panel gives up on its own after a few seconds and calls this, so the two
 -- halves cannot disagree about whether a switch is still in progress.
-_G.__altswitch_cancel = altswitch_teardown
+_G.__altswitch_cancel = altswitch_cancel
+_G.__altswitch_choose = altswitch_choose
 
 local forward_chord = modifier .. " + TAB"
 local reverse_chord = modifier .. " + SHIFT + TAB"

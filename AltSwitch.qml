@@ -1,6 +1,6 @@
 // ALT+TAB or SUPER+TAB window list.
 //
-// This is the display half only. All key handling and all state live in
+// This is the display and pointer half. All key handling and all state live in
 // altswitch.lua next to this file, loaded from the Hyprland config. It owns the
 // frozen window list and the cursor, and drives this panel over IPC:
 //
@@ -8,10 +8,10 @@
 //   omarchy-shell altswitch select 2
 //   omarchy-shell altswitch hide
 //
-// The panel takes exclusive keyboard focus purely so that keys the switcher
-// does not bind are swallowed instead of leaking into the window underneath.
-// It deliberately handles no keys of its own, so there is exactly one place
-// where a keypress can be interpreted.
+// The panel takes no keyboard focus and deliberately handles no keys of its
+// own, so there is exactly one place where a keypress can be interpreted. Row
+// clicks are handed back to Lua to commit through the same path as releasing
+// the modifier.
 
 import Quickshell
 import Quickshell.Io
@@ -30,10 +30,28 @@ Item {
   property bool opened: false
   property var windows: []
   property int selectedIndex: 0
+  property double generation: 0
 
   readonly property string pluginId: String((manifest && manifest.id) || "io.github.pablo-merino.altswitch")
+  // Third-party shell facades do not expose shellConfig. Watch the user's
+  // canonical settings file while keeping writes through the scoped shell API.
+  property var savedShellConfig: ({})
+  FileView {
+    id: pluginConfigFile
+    path: (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")) + "/omarchy/shell.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      try {
+        root.savedShellConfig = JSON.parse(text())
+      } catch (error) {
+        console.warn("AltSwitch: unable to read shell.json:", error)
+      }
+    }
+  }
   readonly property var pluginEntry: {
-    const config = shell ? shell.shellConfig : null
+    const config = root.savedShellConfig
     const plugins = config && Array.isArray(config.plugins) ? config.plugins : []
     for (let i = 0; i < plugins.length; i++) {
       const entry = plugins[i]
@@ -129,12 +147,22 @@ Item {
 
     root.windows = payload.windows || []
     root.selectedIndex = payload.index || 0
+    root.generation = Number(payload.generation) || 0
     root.opened = root.windows.length > 0
   }
 
   function select(index) {
     root.selectedIndex = index
     watchdog.restart()
+  }
+
+  function activate(index) {
+    if (!root.opened || root.generation <= 0 || index < 0 || index >= root.windows.length) return
+    Quickshell.execDetached([
+      "hyprctl",
+      "eval",
+      "__altswitch_choose(" + root.generation + "," + index + ")"
+    ])
   }
 
   function hide() {
@@ -148,7 +176,7 @@ Item {
     modifierStateFile.setText(root.modifierStateContent)
   }
 
-  // shell.json belongs to omarchy-shell and is injected as pluginEntry above.
+  // shell.json belongs to omarchy-shell and is read into pluginEntry above.
   // Project only the validated modifier into Lua state that Hyprland can load
   // directly. Reload after the atomic write lands so both sides always agree.
   FileView {
@@ -178,7 +206,7 @@ Item {
     interval: 10000
     onTriggered: {
       root.hide()
-      Quickshell.execDetached(["hyprctl", "eval", "__altswitch_cancel()"])
+      Quickshell.execDetached(["hyprctl", "eval", "__altswitch_cancel(" + root.generation + ")"])
     }
   }
 
@@ -254,7 +282,7 @@ Item {
         anchors.leftMargin: card.contentLeftInset
         anchors.rightMargin: card.contentRightInset
         clip: true
-        interactive: false
+        interactive: contentHeight > height
         model: root.windows
         currentIndex: root.selectedIndex
         highlightMoveDuration: 0
@@ -319,6 +347,12 @@ Item {
               font.family: Style.font.menuFamily
               font.pixelSize: Style.font.body
             }
+          }
+
+          TapHandler {
+            acceptedButtons: Qt.LeftButton
+            cursorShape: Qt.PointingHandCursor
+            onTapped: root.activate(index)
           }
         }
       }

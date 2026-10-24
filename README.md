@@ -17,6 +17,7 @@ highlighted window.
 | `ALT`+`TAB` again, `ALT` still held | Move one further down the list |
 | `ALT`+`SHIFT`+`TAB` | Move back up the list |
 | Release `ALT` | Switch to the highlighted window |
+| Left-click a window | Switch to that window |
 | `ALT`+`ESCAPE` | Cancel without switching |
 
 Two things make this behave like Windows rather than like Hyprland's
@@ -123,9 +124,9 @@ the window list from `hl.get_windows()`, sorted by Hyprland's own
 `focus_history_id`, and drives the panel with `omarchy-shell altswitch
 show|select|hide`.
 
-`AltSwitch.qml` runs inside `omarchy-shell` and only draws the list. It takes no
-keyboard focus, so it cannot trap your keyboard, and it hides itself after ten
-seconds if a modifier release is ever missed.
+`AltSwitch.qml` runs inside `omarchy-shell`, draws the list, and forwards row
+clicks to Lua. It takes no keyboard focus, so it cannot trap your keyboard, and
+it hides itself after ten seconds if a modifier release is ever missed.
 
 Two Hyprland details are worth knowing if you plan to modify this:
 
