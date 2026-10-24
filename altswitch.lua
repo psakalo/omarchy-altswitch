@@ -88,10 +88,12 @@ local function altswitch_payload()
   local rows = {}
   for _, window in ipairs(altswitch.windows) do
     rows[#rows + 1] = string.format(
-      '{"title":%s,"appClass":%s,"workspace":%s}',
+      '{"title":%s,"appClass":%s,"workspace":%s,"pid":%d,"xwayland":%s}',
       altswitch_json_string(window.title),
       altswitch_json_string(window.class),
-      altswitch_json_string(window.workspace and window.workspace.name or "")
+      altswitch_json_string(window.workspace and window.workspace.name or ""),
+      tonumber(window.pid) or 0,
+      window.xwayland and "true" or "false"
     )
   end
 

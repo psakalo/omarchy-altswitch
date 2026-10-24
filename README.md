@@ -76,7 +76,13 @@ the new bindings take effect. The selected modifier controls all three chords:
 
 ### Application icons
 
-Application icons are shown by default. Hide them with:
+Application icons are shown by default. They come from the window's desktop
+entry. XWayland windows without one, such as Wine and Proton programs that all
+share the `steam_app_default` class, show the icon the window itself carries.
+`window-icon.py` reads it with `xprop` and caches it under
+`~/.cache/omarchy/io.github.pablo-merino.altswitch/icons/`.
+
+Hide icons with:
 
 ```bash
 omarchy-shell altswitch set showIcons false

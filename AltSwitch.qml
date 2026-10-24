@@ -140,9 +140,69 @@ Item {
     return name.replace(/(^|\s)\S/g, function(letter) { return letter.toUpperCase() })
   }
 
-  function appIcon(appClass) {
-    const raw = String(appClass || "").trim()
+  // Icons read from XWayland windows that match no desktop entry, such as Wine
+  // and Proton programs, keyed by pid. A value is a file URL, or "" while the
+  // icon is being read or when the window has none.
+  property var windowIcons: ({})
+  readonly property string windowIconScript:
+    decodeURIComponent(Qt.resolvedUrl("window-icon.py").toString().replace(/^file:\/\//, ""))
+
+  function requestWindowIcons(windows) {
+    if (!root.showIcons) return
+
+    const icons = ({})
+    for (let i = 0; i < windows.length; i++) {
+      const window = windows[i]
+      const pid = Number(window.pid) || 0
+      if (!window.xwayland || pid <= 0) continue
+
+      // Keep only pids still on screen, so a reused pid is read again.
+      if (root.windowIcons[pid] !== undefined) {
+        icons[pid] = root.windowIcons[pid]
+        continue
+      }
+      if (root.desktopEntryFor(String(window.appClass || "").trim())) continue
+
+      icons[pid] = ""
+      const process = windowIconProcess.createObject(root, {
+        pid: pid,
+        command: ["python3", root.windowIconScript, String(pid), String(window.title || "")]
+      })
+      process.running = true
+    }
+    root.windowIcons = icons
+  }
+
+  function setWindowIcon(pid, path) {
+    if (!path || root.windowIcons[pid] === undefined) return
+    const icons = ({})
+    for (const key in root.windowIcons) icons[key] = root.windowIcons[key]
+    icons[pid] = Util.fileUrl(path)
+    root.windowIcons = icons
+  }
+
+  Component {
+    id: windowIconProcess
+
+    Process {
+      id: process
+
+      property int pid: 0
+
+      stdout: StdioCollector {
+        waitForEnd: true
+        onStreamFinished: {
+          root.setWindowIcon(process.pid, String(text || "").trim())
+          process.destroy()
+        }
+      }
+    }
+  }
+
+  function appIcon(row) {
+    const raw = String(row.appClass || "").trim()
     const entry = raw ? root.desktopEntryFor(raw) : null
+    if (!entry && root.windowIcons[row.pid]) return root.windowIcons[row.pid]
     const icon = entry ? String(entry.icon || "") : ""
 
     if (icon.indexOf("file://") === 0 || icon.indexOf("image://") === 0) return icon
@@ -173,6 +233,7 @@ Item {
     }
 
     root.windows = payload.windows || []
+    root.requestWindowIcons(root.windows)
     root.selectedIndex = payload.index || 0
     root.generation = generation
     root.opened = root.windows.length > 0
@@ -359,7 +420,7 @@ Item {
               fillMode: Image.PreserveAspectFit
               sourceSize.width: width * Screen.devicePixelRatio
               sourceSize.height: height * Screen.devicePixelRatio
-              source: root.appIcon(modelData.appClass)
+              source: root.appIcon(modelData)
               asynchronous: true
             }
 
